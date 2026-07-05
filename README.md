@@ -41,7 +41,7 @@
 ### Option 1: Docker (Recommended — One Command)
 
 ```bash
-git clone https://github.com/yourusername/AutoTestX.git
+git clone https://github.com/Aayu62/AutoTestX.git
 cd AutoTestX
 docker compose up --build
 ```
