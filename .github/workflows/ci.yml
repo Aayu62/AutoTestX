@@ -1,0 +1,235 @@
+name: AutoTestX CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Test environment'
+        required: true
+        default: 'qa'
+        type: choice
+        options: [ qa, dev, staging ]
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'testng.xml'
+        type: choice
+        options: [ testng.xml, testng-regression.xml ]
+
+env:
+  JAVA_VERSION: '21'
+  MAVEN_OPTS: '-Xmx1024m'
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 1: Build BookVerse API
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-api:
+    name: Build BookVerse API
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bookverse-api
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build BookVerse API (skip tests)
+        run: mvn clean package -DskipTests --no-transfer-progress
+
+      - name: Upload API JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bookverse-api-jar
+          path: bookverse-api/target/*.jar
+          retention-days: 1
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 2: Run API Tests
+  # ─────────────────────────────────────────────────────────────────────────────
+  run-tests:
+    name: Run AutoTestX — API Tests
+    runs-on: ubuntu-latest
+    needs: build-api
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB:       bookversedb
+          POSTGRES_USER:     bookverse
+          POSTGRES_PASSWORD: bookverse123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Download API JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: bookverse-api-jar
+          path: bookverse-api/target/
+
+      - name: Start BookVerse API
+        working-directory: bookverse-api
+        run: |
+          java -jar target/*.jar \
+            --spring.profiles.active=default \
+            --spring.datasource.url=jdbc:postgresql://localhost:5432/bookversedb \
+            --spring.datasource.username=bookverse \
+            --spring.datasource.password=bookverse123 &
+          echo $! > /tmp/bookverse-api.pid
+          echo "BookVerse API started with PID $(cat /tmp/bookverse-api.pid)"
+
+      - name: Wait for BookVerse API to be ready
+        run: |
+          echo "Waiting for API health check..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080/actuator/health > /dev/null 2>&1; then
+              echo "✅ BookVerse API is ready!"
+              break
+            fi
+            echo "Attempt $i/30 — API not ready yet, waiting 5s..."
+            sleep 5
+          done
+          curl -sf http://localhost:8080/actuator/health || (echo "❌ API failed to start" && exit 1)
+
+      - name: Show API Health Status
+        run: curl -s http://localhost:8080/actuator/health | python3 -m json.tool
+
+      - name: Create test directories
+        working-directory: autotestx
+        run: mkdir -p reports logs
+
+      - name: Run AutoTestX Tests
+        working-directory: autotestx
+        env:
+          ENV: ${{ github.event.inputs.environment || 'qa' }}
+        run: |
+          mvn test \
+            -Denv=$ENV \
+            -DsuiteFile=${{ github.event.inputs.test_suite || 'testng.xml' }} \
+            --no-transfer-progress \
+            -Dsurefire.failIfNoSpecifiedTests=false
+        continue-on-error: true
+
+      - name: Generate Allure Report
+        if: always()
+        working-directory: autotestx
+        run: |
+          mvn allure:report --no-transfer-progress || echo "Allure report generation failed (non-critical)"
+
+      - name: Upload Extent Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extent-reports-${{ github.run_number }}
+          path: autotestx/reports/
+          retention-days: 30
+
+      - name: Upload Allure Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ github.run_number }}
+          path: autotestx/target/allure-results/
+          retention-days: 30
+
+      - name: Upload Test Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ github.run_number }}
+          path: autotestx/logs/
+          retention-days: 7
+
+      - name: Stop BookVerse API
+        if: always()
+        run: |
+          if [ -f /tmp/bookverse-api.pid ]; then
+            kill $(cat /tmp/bookverse-api.pid) || true
+          fi
+
+      - name: Check Test Results
+        working-directory: autotestx
+        run: |
+          if [ -f target/surefire-reports/testng-results.xml ]; then
+            FAILED=$(grep -c 'status="FAIL"' target/surefire-reports/testng-results.xml || echo 0)
+            PASSED=$(grep -c 'status="PASS"' target/surefire-reports/testng-results.xml || echo 0)
+            echo "📊 Test Results: Passed=$PASSED | Failed=$FAILED"
+            if [ "$FAILED" -gt "0" ]; then
+              echo "❌ $FAILED test(s) failed"
+              exit 1
+            fi
+            echo "✅ All tests passed!"
+          else
+            echo "⚠️ No surefire report found"
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Job 3: Publish Allure to GitHub Pages (main branch only)
+  # ─────────────────────────────────────────────────────────────────────────────
+  publish-report:
+    name: Publish Allure Report to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: run-tests
+    if: github.ref == 'refs/heads/main' && always()
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Allure Results
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-results-${{ github.run_number }}
+          path: allure-results/
+
+      - name: Generate & Publish Allure Report
+        uses: simple-elf/allure-report-action@master
+        if: always()
+        id: allure-report
+        with:
+          allure_results: allure-results
+          gh_pages: gh-pages
+          allure_report: allure-report
+          allure_history: allure-history
+          keep_reports: 30
+
+      - name: Deploy to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history

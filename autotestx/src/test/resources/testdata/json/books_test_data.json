@@ -1,0 +1,60 @@
+{
+  "validBook": {
+    "title": "The Pragmatic Programmer",
+    "isbn": "9780135957059",
+    "description": "Your journey to mastery, 20th Anniversary Edition.",
+    "price": 49.99,
+    "stock": 25,
+    "authorId": 4,
+    "categoryId": 4
+  },
+  "bookMissingTitle": {
+    "isbn": "9780135957060",
+    "price": 29.99,
+    "stock": 10,
+    "authorId": 4,
+    "categoryId": 4
+  },
+  "bookNegativePrice": {
+    "title": "Bad Price Book",
+    "isbn": "9780135957061",
+    "price": -5.00,
+    "stock": 10,
+    "authorId": 4,
+    "categoryId": 4
+  },
+  "bookInvalidCategory": {
+    "title": "Wrong Category Book",
+    "isbn": "9780135957062",
+    "price": 19.99,
+    "stock": 10,
+    "authorId": 1,
+    "categoryId": 99999
+  },
+  "booksDataDriven": [
+    {
+      "title": "DDT Book Alpha",
+      "isbn": "9780000000001",
+      "price": 15.00,
+      "stock": 10,
+      "authorId": 1,
+      "categoryId": 1
+    },
+    {
+      "title": "DDT Book Beta",
+      "isbn": "9780000000002",
+      "price": 25.00,
+      "stock": 20,
+      "authorId": 2,
+      "categoryId": 2
+    },
+    {
+      "title": "DDT Book Gamma",
+      "isbn": "9780000000003",
+      "price": 35.00,
+      "stock": 30,
+      "authorId": 3,
+      "categoryId": 3
+    }
+  ]
+}

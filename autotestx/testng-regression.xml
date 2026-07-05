@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<suite name="AutoTestX — Regression Suite"
+       parallel="tests"
+       thread-count="3"
+       verbose="1">
+
+    <listeners>
+        <listener class-name="com.autotestx.listeners.TestListener"/>
+    </listeners>
+
+    <test name="Regression — Auth">
+        <classes>
+            <class name="com.autotestx.tests.auth.LoginTests"/>
+            <class name="com.autotestx.tests.auth.RegisterTests"/>
+        </classes>
+    </test>
+
+    <test name="Regression — Books">
+        <classes>
+            <class name="com.autotestx.tests.books.BookCrudTests"/>
+            <class name="com.autotestx.tests.books.BookSearchTests"/>
+        </classes>
+    </test>
+
+    <test name="Regression — Orders, Reviews, Users">
+        <classes>
+            <class name="com.autotestx.tests.orders.OrderTests"/>
+            <class name="com.autotestx.tests.reviews.ReviewTests"/>
+            <class name="com.autotestx.tests.users.UserTests"/>
+        </classes>
+    </test>
+
+    <test name="Regression — Security">
+        <classes>
+            <class name="com.autotestx.tests.security.SecurityTests"/>
+        </classes>
+    </test>
+
+    <test name="Regression — DB">
+        <classes>
+            <class name="com.autotestx.tests.database.DBValidationTests"/>
+        </classes>
+    </test>
+
+</suite>

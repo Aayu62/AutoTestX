@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AuthResponse",
+  "description": "JSON schema for BookVerse login/register response",
+  "type": "object",
+  "required": ["success", "message", "data", "timestamp"],
+  "properties": {
+    "success": {
+      "type": "boolean"
+    },
+    "message": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "data": {
+      "type": "object",
+      "required": ["accessToken", "refreshToken", "tokenType", "expiresIn", "user"],
+      "properties": {
+        "accessToken": {
+          "type": "string",
+          "minLength": 10
+        },
+        "refreshToken": {
+          "type": "string",
+          "minLength": 10
+        },
+        "tokenType": {
+          "type": "string",
+          "enum": ["Bearer"]
+        },
+        "expiresIn": {
+          "type": "number",
+          "minimum": 1
+        },
+        "user": {
+          "type": "object",
+          "required": ["id", "name", "email", "role"],
+          "properties": {
+            "id": {
+              "type": "number",
+              "minimum": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "role": {
+              "type": "string",
+              "enum": ["USER", "ADMIN"]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    }
+  }
+}

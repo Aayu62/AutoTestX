@@ -1,0 +1,91 @@
+version: "3.9"
+
+# ======================================================
+# AutoTestX — Docker Compose
+# Usage: docker compose up --build
+#
+# Services:
+#   postgres      — PostgreSQL 15 database
+#   bookverse-api — Spring Boot API (System Under Test)
+#   autotestx     — Java test runner
+# ======================================================
+
+networks:
+  autotestx-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  test-reports:
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: bookverse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       bookversedb
+      POSTGRES_USER:     bookverse
+      POSTGRES_PASSWORD: bookverse123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - autotestx-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bookverse -d bookversedb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── BookVerse API ───────────────────────────────────────────────────────────
+  bookverse-api:
+    build:
+      context: ./bookverse-api
+      dockerfile: Dockerfile
+    container_name: bookverse-api
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/bookversedb
+      SPRING_DATASOURCE_USERNAME: bookverse
+      SPRING_DATASOURCE_PASSWORD: bookverse123
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - autotestx-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 90s
+
+  # ── AutoTestX Test Runner ────────────────────────────────────────────────────
+  autotestx:
+    build:
+      context: ./autotestx
+      dockerfile: Dockerfile
+    container_name: autotestx-runner
+    environment:
+      ENV: docker
+    depends_on:
+      bookverse-api:
+        condition: service_healthy
+    volumes:
+      - test-reports:/app/reports
+    networks:
+      - autotestx-net
+    command: >
+      mvn test
+      -Denv=docker
+      -DsuiteFile=testng.xml
+      -Dsurefire.failIfNoSpecifiedTests=false
+      --no-transfer-progress
