@@ -48,10 +48,10 @@ docker compose up --build
 
 This starts:
 1. **PostgreSQL 15** — database with schema + seed data
-2. **BookVerse API** — Spring Boot REST API on `:8080`
+2. **BookVerse API** — Spring Boot REST API on `:8081`
 3. **AutoTestX Runner** — executes all 150+ tests, generates reports
 
-**View Swagger UI:** http://localhost:8080/swagger-ui.html
+**View Swagger UI:** http://localhost:8081/swagger-ui.html
 
 ### Option 2: Run Tests Locally
 
